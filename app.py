@@ -1,7 +1,6 @@
 import base64
 import io
 import json
-import os
 import pandas as pd
 import requests
 import streamlit as st
@@ -9,7 +8,7 @@ from PIL import Image
 
 # إعداد الصفحة وتصميم واجهة احترافي
 st.set_page_config(
-    page_title="VoltEstimate AI - محلل المخططات المجاني",
+    page_title="VoltEstimate AI - محلل المخططات (Google Gemini)",
     page_icon="⚡",
     layout="centered",
 )
@@ -28,23 +27,23 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.markdown("<h1>⚡ VoltEstimate AI (مجاني)</h1>", unsafe_allow_html=True)
+st.markdown("<h1>⚡ VoltEstimate AI (Google Gemini)</h1>", unsafe_allow_html=True)
 st.markdown(
     "<p"
     " style='text-align: center; color: #64748b; font-size: 1rem;'>حصر كميات"
-    " المخططات الكهربائية باستخدام الذكاء الاصطناعي المجاني</p>",
+    " المخططات الكهربائية باستخدام ذكاء Google Gemini المجاني</p>",
     unsafe_allow_html=True,
 )
 st.markdown("---")
 
 # الشريط الجانبي للإعدادات والأسعار
-st.sidebar.markdown("### ⚙️ إعدادات النظام المجاني")
+st.sidebar.markdown("### ⚙️ إعدادات النظام")
 st.sidebar.markdown(
-    "احصل على مفتاح مجاني من [Groq"
-    " Console](https://console.groq.com/keys) بدون أي رسوم."
+    "احصل على مفتاح مجاني من [Google AI"
+    " Studio](https://aistudio.google.com/) بدون رسوم."
 )
 api_key = st.sidebar.text_input(
-    "أدخل مفتاح Groq API Key المجاني", type="password", placeholder="gsk_..."
+    "أدخل مفتاح Gemini API Key", type="password", placeholder="AIza..."
 )
 
 st.sidebar.markdown("---")
@@ -74,57 +73,53 @@ if uploaded_file is not None:
   st.image(image, caption="معاينة المخطط", use_container_width=True)
 
   if not api_key:
-    st.warning("⚠️ يرجى إدخال مفتاح Groq API المجاني في الشريط الجانبي للمتابعة.")
+    st.warning("⚠️ يرجى إدخال مفتاح Gemini API Key في الشريط الجانبي للمتابعة.")
   else:
-    if st.button("🚀 تحليل المخطط مجاناً"):
-      with st.spinner("🔍 جاري فحص المخطط واستخراج الكميات عبر Groq..."):
+    if st.button("🚀 تحليل المخطط عبر Gemini"):
+      with st.spinner("🔍 جاري فحص المخطط واستخراج الكميات عبر Google AI..."):
         try:
           # تحويل الصورة إلى Base64
           buffered = io.BytesIO()
           image.save(buffered, format="JPEG")
-          base64_image = base64.b64encode(buffered.getvalue()).decode("utf-8")
+          image_bytes = buffered.getvalue()
+          base64_image = base64.b64encode(image_bytes).decode("utf-8")
 
-          # إرسال الطلب باستخدام النموذج المحدث لـ Groq
-          headers = {
-              "Authorization": f"Bearer {api_key}",
-              "Content-Type": "application/json",
-          }
+          # استخدام نموذج gemini-1.5-flash السريع والمدعوم للرؤية
+          url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+
+          headers = {"Content-Type": "application/json"}
 
           payload = {
-              "model": "meta-llama/llama-3.2-90b-vision-preview",
-              "messages": [{
-                  "role": "user",
-                  "content": [
+              "contents": [{
+                  "parts": [
                       {
-                          "type": "text",
                           "text": (
                               "قم بتحليل هذا المخطط الكهربائي وعد جميع العناصر"
                               " الظاهرة (مثل المفاتيح، المآخذ، الإضاءة، لوحات"
-                              " التوزيع). أجب فقط بصيغة JSON صحيح يحتوي على مفتاح"
-                              " 'items' وتحته قائمة بكل عنصر له 'Item_Name' و"
-                              " 'Quantity'."
-                          ),
+                              " التوزيع). يجب أن تعيد النتيجة بصيغة JSON صحيح"
+                              " فقط بدون أي نص إضافي، بحيث يكون الهيكل يحتوي على"
+                              " مفتاح 'items' وتحته قائمة بكل عنصر له 'Item_Name'"
+                              " و 'Quantity'."
+                          )
                       },
                       {
-                          "type": "image_url",
-                          "image_url": {
-                              "url": f"data:image/jpeg;base64,{base64_image}"
-                          },
+                          "inline_data": {
+                              "mime_type": "image/jpeg",
+                              "data": base64_image,
+                          }
                       },
-                  ],
+                  ]
               }],
-              "response_format": {"type": "json_object"},
+              "generationConfig": {"response_mime_type": "application/json"},
           }
 
-          response = requests.post(
-              "https://api.groq.com/openai/v1/chat/completions",
-              headers=headers,
-              json=payload,
-          )
+          response = requests.post(url, headers=headers, json=payload)
           result_data = response.json()
 
-          if "choices" in result_data:
-            content_str = result_data["choices"][0]["message"]["content"]
+          if "candidates" in result_data:
+            content_str = (
+                result_data["candidates"][0]["content"]["parts"][0]["text"]
+            )
             result_json = json.loads(content_str)
             items_list = (
                 result_json.get("items")
@@ -156,7 +151,7 @@ if uploaded_file is not None:
 
             df = pd.DataFrame(processed_data)
 
-            st.success("✨ تم التحليل بنجاح وبدون أي تكلفة!")
+            st.success("✨ تم التحليل بنجاح وبدقة عالية عبر Google Gemini!")
 
             col1, col2 = st.columns(2)
             with col1:
