@@ -84,14 +84,14 @@ if uploaded_file is not None:
           image.save(buffered, format="JPEG")
           base64_image = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
-          # إرسال الطلب إلى واجهة Groq المجانية للرؤية الحاسوبية
+          # إرسال الطلب باستخدام النموذج المحدث لـ Groq
           headers = {
               "Authorization": f"Bearer {api_key}",
               "Content-Type": "application/json",
           }
 
           payload = {
-              "model": "llama-3.2-11b-vision-preview",
+              "model": "meta-llama/llama-3.2-90b-vision-preview",
               "messages": [{
                   "role": "user",
                   "content": [
